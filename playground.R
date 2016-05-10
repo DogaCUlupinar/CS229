@@ -26,7 +26,7 @@ learned_user_features = matrix(runif(20,1,2),nrow = 10, ncol = 2)
 learned_movie_features = matrix(0,nrow= dim(movie_features)[1], ncol = dim(movie_features)[2])
 #ridge regression to find movie feature vectors
 
-for (i in c(1:20)){
+for (i in c(1:60)){
   for (i in c(1:dim(ratings_df)[1])){
     ridge = lm.ridge(t(data.matrix(incomp_df[i,incomp_df[i,] != -1])) ~ feat.1 + feat.2 + 0, data=data.frame( feat = learned_user_features[incomp_df[i,] != -1,]), lambda=0)
     learned_movie_features[i,] = coef(ridge)

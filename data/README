@@ -1,0 +1,41 @@
+1. Chromosome 22 of 1000 genomes
+Other chromosomes can be obtained on request
+
+Files:
+*************
+A)
+chr-22.geno
+Binary matrix of genotypes
+Rows=SNPs
+Columns=Individuals
+(i,j)=1 implies individual carries allele 1
+
+This is haploid data.
+Since each individual is diploid, the two homologous chromosomes of a single individual correspond to two columns in this file
+1=> Genotype carries the reference allele
+
+
+*************
+B)
+chr-22.snp
+One line for each SNP. 6 columns per line
+1: SNP ID
+2: chromsome number
+3: genetic position
+4: physical position
+5: allele 1 (reference)
+6: allele 2
+ 
+*************
+C)
+chr-22.ind
+One line for each individual. 3 columns per line
+
+1: Individual ID
+2: Sex M/F/U (U=unknown)
+3: Population ID 
+
+
+This dataset has 14 populations, 1092 individuals and ~400K SNPs.
+
+
