@@ -1,5 +1,5 @@
-out = open("chr-22.geno.reduced.csv","w")
-with open("chr-22.geno.reduced") as f:
+out = open("chr-20.geno.csv","w")
+with open("chr-20.geno") as f:
 	for line in f:
 		out.write(",".join(list(line.strip()))+"\n")
 
