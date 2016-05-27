@@ -120,7 +120,7 @@ maskValues2 = function(diploid,MISSING_PERCENTAGE){
 
 #if (abs(length(which(diploid_incomp == -1))/length(diploid_incomp) - MISSING_PERCENTAGE) > .05) diploid_incomp = maskValues(diploid)
 
-ridgeImpute = function(diploid_incomp,missing,not_missing,FEATURE_COUNT,LAMBDA1,LAMBDA2,verbosity = 0){
+ridgeImpute = function(diploid_incomp,missing,not_missing,FEATURE_COUNT,LAMBDA1,LAMBDA2,verbosity = 0,tol = .3){
   ##now lets do the regression
   num_individuals = dim(diploid_incomp)[2]
   num_snps = dim(diploid_incomp)[1]
@@ -133,7 +133,7 @@ ridgeImpute = function(diploid_incomp,missing,not_missing,FEATURE_COUNT,LAMBDA1,
   converge = Inf
   old_converge = -Inf
   iter = 0 
-  while(converge != -1 && iter < 10){
+  while(abs(converge - old_converge) > tol && iter < 20){
     iter = iter + 1
     old_converge = converge
     #ridge regression to find the snp feature matrix
@@ -179,13 +179,13 @@ diploid_benchmark_test = cbind(diploid_benchmark_ref,diploid_benchmark)
 diploid_matrix = data.matrix(diploid_European)
 total_corr = 0
 
-incomp = maskValues(diploid_matrix,.25)
+incomp = maskValues3(diploid_matrix,4,309)
 diploid_incomp = incomp$diploid_incomp
 
 ref_missing = incomp$ref_missing
 not_missing = incomp$not_missing
 
-system.time(my_diploid_unrounded <- ridgeImpute(diploid_incomp,ref_missing,not_missing,25,2,.5,verbosity = 2))
+system.time(my_diploid_unrounded <- ridgeImpute(diploid_incomp,ref_missing,not_missing,5,2,.5,verbosity = 2))
 my_diploid = round(my_diploid_unrounded)
 my_diploid = apply(my_diploid,c(1,2),helper)
 real_values = diploid_matrix[ref_missing]
@@ -193,6 +193,7 @@ imputed_values = my_diploid[ref_missing]
 
 acc = length(which(imputed_values == real_values))/length(imputed_values)
 print(sprintf("With feature count %d and LAMDA %d F! score is %f and accuracy %f",FEATURE_COUNT,LAMBDA,F1score(imputed_values,real_values),acc))
+
 correlation = cor(imputed_values,real_values)^2
 print(i)
 print(correlation)
@@ -232,20 +233,38 @@ mtext(side = 4,line = 3, "Number Selected")
 
 legend("topleft",legend=c("MSE","Runtime (Seconds)"),pch = c(1,16))
 #Running the algy
-if (FALSE){
+accuracy = matrix(0,1,49)
+if (TRUE){
   LAMBDA = 0
-  for( j in seq(5,50,5)){
+  for( j in seq(2,50,1)){
     FEATURE_COUNT = j
-    for (i in c(1:10)){
-      LAMBDA = i
-      diploid_incomp =maskValues(diploid,MISSING_PERCENTAGE)
-      my_diploid = ridgeImpute(diploid_incomp,FEATURE_COUNT,LAMBDA)
-      real_values = diploid_matrix[which(diploid_incomp == -1)]
-      imputed_values = my_diploid[which(diploid_incomp == -1)]
-      acc = length(which(imputed_values == real_values))/length(imputed_values)
-      print(sprintf("With feature count %d and LAMDA %d F! score is %f and accuracy %f",FEATURE_COUNT,LAMBDA,F1score(imputed_values,real_values),acc))
+    for (i in 2){
+      LAMBDA1 = i
+      for( k in .54){
+        LAMBDA2 = k
+        incomp = maskValues3(diploid_matrix,4,309)
+        diploid_incomp = incomp$diploid_incomp
+        
+        ref_missing = incomp$ref_missing
+        not_missing = incomp$not_missing
+        
+        system.time(my_diploid_unrounded <- ridgeImpute(diploid_incomp,ref_missing,not_missing,FEATURE_COUNT,LAMBDA1,LAMBDA2,verbosity = 0))
+        my_diploid = round(my_diploid_unrounded)
+        my_diploid = apply(my_diploid,c(1,2),helper)
+        real_values = diploid_matrix[ref_missing]
+        imputed_values = my_diploid[ref_missing]
+        
+        acc = length(which(imputed_values == real_values))/length(imputed_values)
+        print(sprintf("With feature count %d and LAMDA %d F! score is %f and accuracy %f",FEATURE_COUNT,LAMBDA,F1score(imputed_values,real_values),acc))
+        
+        accuracy[j] = F1score(imputed_values,real_values)
+        correlation = cor(imputed_values,real_values)^2
+        print(correlation)
+      }
+
     }
   }
+  plot(seq(2,50,1),accuracy[which(accuracy != 0)],xlab="Rank",ylab="F1score ",main = "Determining Rank",type = "b")
 }
 
 
