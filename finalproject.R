@@ -1,5 +1,6 @@
 library(stringr)
 library(MASS)
+library(mixtools)
 
 #functions
 F1score = function(imputed_values,real_values){
@@ -11,8 +12,8 @@ F1score = function(imputed_values,real_values){
   fn = length(which((diff_imp - diff_real) < 0))
   precision = tp/(tp +fp)
   recall = tp/(tp+fn)
-  print(fp/length(imputed_values))
-  print(fn)
+  #print(fp/length(imputed_values))
+  #print(fn)
   return(2 *(precision*recall)/(precision + recall))
 }
 
@@ -31,7 +32,7 @@ setwd("/Users/dulupinar/Documents/UCLA/Classes/Spring16/CS229/project")
 
 #Constants
 MISSING_VAL        = -1         #the value we use to denote that it is missing
-MISSING_PERCENTAGE = .01  #the percentage of missing information we want
+MISSING_PERCENTAGE = .1  #the percentage of missing information we want
 FEATURE_COUNT      = 5        #the columns of features we would like
 LAMBDA             = 3
 
@@ -40,6 +41,7 @@ if ("data_init" %in% ls() == FALSE){
   #read in data
   haploid = read.csv("./data/chr-22.geno.reduced.csv",header = FALSE)
   diploid_benchmark = read.table("./data/testytest.txt",sep = " ")
+  diploid_benchmark_ref = read.table("./data/reftest.txt",sep = " ")
   individuals = read.table("./data/chr-22.ind")
   if("snps" %in% ls() == FALSE) snps = read.table("./data/chr-22.snp")
   
@@ -51,10 +53,10 @@ if ("data_init" %in% ls() == FALSE){
   colnames(diploid) = individuals[seq(1,num_individuals,2),1]
   rownames(diploid) = snp_id
 
-  num_individuals = num_individuals/2
+  global_populations = str_split_fixed(individuals[seq(1, num_individuals, 2), 3], ":", 2)[,2]
   
   diploid_incomp = data.matrix(diploid)
-  global_populations = str_split_fixed(individuals[seq(1, num_individuals, 2), 3], ":", 2)[,2]
+  
   data_init = 1
 }
 diploid_matrix = data.matrix(diploid)
@@ -63,6 +65,8 @@ diploid_matrix = data.matrix(diploid)
 maskValues = function(diploid,MISSING_PERCENTAGE){
   #print("Recerating missing values")
   diploid_incomp = data.matrix(diploid)
+  num_snps = dim(diploid)[1]
+  num_individuals = dim(diploid)[2]
   for (i in c(1:num_snps)){
     for (j in c(1:num_individuals)){
       if(runif(1) < MISSING_PERCENTAGE){
@@ -73,33 +77,33 @@ maskValues = function(diploid,MISSING_PERCENTAGE){
 
   ref_missing = which(diploid_incomp == -1)
   not_missing = which(diploid_incomp != -1)
-  
-  diploid_incomp = apply(diploid_incomp,c(1,2),helper)
+
   return(list(diploid_incomp = diploid_incomp,ref_missing = ref_missing, not_missing = not_missing))
 }
 
 helper = function(x){
-  if(x == -1){
+  if(x < 0){
     x = 0
+  }
+  if(x>2){
+    x = 2
   }
   return(x)
 }
 
-maskValues3 = function(diploid,missing_rows){
+maskValues3 = function(diploid,missing_rows,ref_end){
   #missing_rows is a vector of snps that you want to lose
   diploid_incomp = data.matrix(diploid)
+  num_individuals = dim(diploid)[2]
   for (i in missing_rows){
-    diploid_incomp[i,] = -1
+    diploid_incomp[i,(ref_end+1):num_individuals] = -1
   }
   
   ref_missing = which(diploid_incomp == -1)
   not_missing = which(diploid_incomp != -1)
   
-  diploid_incomp = apply(diploid_incomp,c(1,2),helper)
   return(list(diploid_incomp = diploid_incomp,ref_missing = ref_missing, not_missing = not_missing))
 }
-
-
 
 maskValues2 = function(diploid,MISSING_PERCENTAGE){
   #missing percentage of rows
@@ -114,7 +118,7 @@ maskValues2 = function(diploid,MISSING_PERCENTAGE){
   return(list(diploid_incomp = diploid_incomp,ref_missing = sort(cols_to_mask_list), not_missing = all[!(all %in% cols_to_mask_list)]))
 }
 
-if (abs(length(which(diploid_incomp == -1))/length(diploid_incomp) - MISSING_PERCENTAGE) > .05) diploid_incomp = maskValues(diploid)
+#if (abs(length(which(diploid_incomp == -1))/length(diploid_incomp) - MISSING_PERCENTAGE) > .05) diploid_incomp = maskValues(diploid)
 
 ridgeImpute = function(diploid_incomp,missing,not_missing,FEATURE_COUNT,LAMBDA1,LAMBDA2,verbosity = 0){
   ##now lets do the regression
@@ -134,16 +138,16 @@ ridgeImpute = function(diploid_incomp,missing,not_missing,FEATURE_COUNT,LAMBDA1,
     old_converge = converge
     #ridge regression to find the snp feature matrix
     for (i in c(1:num_snps)){
-      y = diploid_incomp[i,]
-      x = learned_individual_features
+      y = diploid_incomp[i,diploid_incomp[i,] != MISSING_VAL]
+      x = learned_individual_features[diploid_incomp[i,] != MISSING_VAL,]
       ridge = lm.ridge(y ~. + 0, data = cbind.data.frame(y,x), lambda=LAMBDA1) #should be 281
       learned_snp_features[i,] = coef(ridge)
     }
     
     #ridge regression to find individual feature matrix
     for (i in c(1:num_individuals)){
-      y = diploid_incomp[,i]
-      x = learned_snp_features
+      y = diploid_incomp[diploid_incomp[,i] != -1,i]
+      x = learned_snp_features[diploid_incomp[,i] != -1,]
       ridge = lm.ridge( y~. + 0, data = cbind.data.frame(y,x), lambda=LAMBDA2) #should be .24
       learned_individual_features[i,] = coef(ridge)
     }
@@ -164,25 +168,53 @@ ridgeImpute = function(diploid_incomp,missing,not_missing,FEATURE_COUNT,LAMBDA1,
 ##plot stuff
 #plot(as.numeric(names(ridge$GCV)),ridge$GCV,ylab = "GCV", xlab = expression(paste("Shrinkage Parameter (",lambda,")",sep = '')))
 
+##mask whole rows
 diploid_European = diploid[,which(global_populations == "EUR")] #select population
+diploid_benchmark_test = cbind(diploid_benchmark[,15],diploid_benchmark)
+diploid_benchmark_test = cbind(diploid_benchmark_ref,diploid_benchmark)
 diploid_matrix = data.matrix(diploid_European)
+total_corr = 0
 
-incomp = maskValues(diploid_European,.1)
+incomp = maskValues(diploid_matrix,.25)
 diploid_incomp = incomp$diploid_incomp
+
 ref_missing = incomp$ref_missing
 not_missing = incomp$not_missing
 
-system.time(my_diploid_unrounded <- ridgeImpute(diploid_incomp,ref_missing,not_missing,10,1,.01,verbosity = 2))
+system.time(my_diploid_unrounded <- ridgeImpute(diploid_incomp,ref_missing,not_missing,25,2,.5,verbosity = 2))
 my_diploid = round(my_diploid_unrounded)
+my_diploid = apply(my_diploid,helper)
 real_values = diploid_matrix[ref_missing]
 imputed_values = my_diploid[ref_missing]
 
 acc = length(which(imputed_values == real_values))/length(imputed_values)
 print(sprintf("With feature count %d and LAMDA %d F! score is %f and accuracy %f",FEATURE_COUNT,LAMBDA,F1score(imputed_values,real_values),acc))
+correlation = cor(imputed_values,real_values)^2
+print(i)
+print(correlation)
+if(is.na(correlation)){
+  correlation = 0
+}
+print("bartu")
+total_corr = total_corr + correlation
 
+
+##mask randomly
+total_correlation = 0.861056
 ##gmm garbage
-a = normalmixEM(my_diploid_unrounded[11,],k = 3, lambda = c(300,75,4),mu = c(0,1,2))
-apply(a$posterior,2,which.max)
+a = normalmixEM(my_diploid_unrounded[ref_missing],k = 3,mu = c(0,1),maxrestarts = 10)
+table(apply(a$posterior,1,which.max))
+table(t(diploid_matrix[ref_missing]))
+table(t(my_diploid[ref_missing]))
+
+##pretty gm
+m_0_sd_1 = rnorm(300,mean = 0, sd = .2)
+m_1_sd_1 = rnorm(2000,mean = 1, sd = .2)
+m_2_sd_1 = rnorm(900,mean = 2, sd = .2)
+total = c(m_0_sd_1,m_1_sd_1,m_2_sd_1)
+pretty_gmm = normalmixEM(total,k = 3)
+plot(pretty_gmm,which = 2)
+table(apply(pretty_gmm$posterior,1,which.max))
 
 ##plot stuff for determining rank
 convergence = c(2776,1971,1419,1135,857,710,553,471,394,335,307,264,254,237,181,134,118,83,70,62,62,46,44,36,25,23,22,15,13,11,9,6,4,3,2,2,1,0)
