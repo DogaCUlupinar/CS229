@@ -133,27 +133,31 @@ ridgeImpute = function(diploid_incomp,missing,not_missing,FEATURE_COUNT,LAMBDA1,
   converge = Inf
   old_converge = -Inf
   iter = 0 
-  while(converge != 0 && iter < 10){
+  while(converge != -1 && iter < 10){
     iter = iter + 1
     old_converge = converge
     #ridge regression to find the snp feature matrix
     for (i in c(1:num_snps)){
       y = diploid_incomp[i,diploid_incomp[i,] != MISSING_VAL]
       x = learned_individual_features[diploid_incomp[i,] != MISSING_VAL,]
-      ridge = lm.ridge(y ~. + 0, data = cbind.data.frame(y,x), lambda=LAMBDA1) #should be 281
-      learned_snp_features[i,] = coef(ridge)
+      #svd = svd(x)
+      #d = diag(sapply(svd$d,function(x)return(x/(x^2 + LAMBDA1))))
+      #learned_snp_features[i,] = svd$v %*% d %*% t(svd$u) %*% y
+      learned_snp_features[i,] = solve((t(x) %*% x  + LAMBDA1*diag(dim(x)[2]))) %*% t(x) %*% y
     }
     
     #ridge regression to find individual feature matrix
     for (i in c(1:num_individuals)){
       y = diploid_incomp[diploid_incomp[,i] != -1,i]
       x = learned_snp_features[diploid_incomp[,i] != -1,]
-      ridge = lm.ridge( y~. + 0, data = cbind.data.frame(y,x), lambda=LAMBDA2) #should be .24
-      learned_individual_features[i,] = coef(ridge)
+      #svd = svd(x)
+      #d = diag(sapply(svd$d,function(x)return(x/(x^2 + LAMBDA2))))
+      #learned_individual_features[i,] = svd$v %*% d %*% t(svd$u) %*% y
+      learned_individual_features[i,] =solve((t(x) %*% x  + LAMBDA2*diag(dim(x)[2]))) %*% t(x) %*% y
     }
     
     #determinig convergence
-    my_diploid = round(learned_snp_features %*% t(learned_individual_features))
+    my_diploid = learned_snp_features %*% t(learned_individual_features)
     real_values = diploid_incomp[not_missing]
     imputed_values = my_diploid[not_missing]
     a = (real_values - imputed_values)
@@ -183,7 +187,7 @@ not_missing = incomp$not_missing
 
 system.time(my_diploid_unrounded <- ridgeImpute(diploid_incomp,ref_missing,not_missing,25,2,.5,verbosity = 2))
 my_diploid = round(my_diploid_unrounded)
-my_diploid = apply(my_diploid,helper)
+my_diploid = apply(my_diploid,c(1,2),helper)
 real_values = diploid_matrix[ref_missing]
 imputed_values = my_diploid[ref_missing]
 
