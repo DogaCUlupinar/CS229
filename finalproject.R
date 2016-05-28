@@ -234,6 +234,7 @@ mtext(side = 4,line = 3, "Number Selected")
 legend("topleft",legend=c("MSE","Runtime (Seconds)"),pch = c(1,16))
 #Running the algy
 accuracy = matrix(0,1,49)
+convergee = matrix(0,1,49)
 if (TRUE){
   LAMBDA = 0
   for( j in seq(2,50,1)){
@@ -256,10 +257,14 @@ if (TRUE){
         
         acc = length(which(imputed_values == real_values))/length(imputed_values)
         print(sprintf("With feature count %d and LAMDA %d F! score is %f and accuracy %f",FEATURE_COUNT,LAMBDA,F1score(imputed_values,real_values),acc))
-        
+        real_values = diploid_incomp[not_missing]
+        imputed_values = my_diploid_unrounded[not_missing]
+        a = (real_values - imputed_values)
+        converge = sum(a^2)
         accuracy[j] = F1score(imputed_values,real_values)
+        convergee[j] = converge
         correlation = cor(imputed_values,real_values)^2
-        print(correlation)
+        #print(correlation)
       }
 
     }
